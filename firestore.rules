@@ -1,12 +1,24 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // 1. The "Master Gate" (Global Safety Net)
     match /{document=**} {
       allow read, write: if false;
     }
-    match /appData/{document} {
+
+    // Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    match /appData/{dataId} {
+      // Allow reading app data (tracks, schedule) to anyone for the music community
+      // But in a real app, secrets like adminPin and user passwords should be separated
       allow read: if true;
-      allow write: if true;
+      
+      // Only allow writes if authenticated (even if locally handled by pin for now)
+      // Ideally we'd have a specific admin role in firestore
+      allow write: if isSignedIn();
     }
   }
 }

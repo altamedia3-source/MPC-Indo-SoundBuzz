@@ -2,6 +2,7 @@ import { User, TargetTrack, CloudConfig, AppData, WeeklySchedule, DayConfig } fr
 import { STORAGE_KEY, STORAGE_KEY_USERS, STORAGE_KEY_CLOUD, STORAGE_KEY_SPOTIFY, DEFAULT_TRACKS, DEFAULT_CLOUD_CONFIG, DEFAULT_SPOTIFY_ID, ADMIN_PIN } from '../constants';
 import { db } from './firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { handleFirestoreError, OperationType } from './firestore-errors';
 
 // --- CLOUD STORAGE SERVICE (Firebase Firestore Adapter) ---
 
@@ -30,9 +31,16 @@ export const storageService = {
   // --- INTERNAL HELPERS ---
 
   async _fetchFullData(): Promise<AppData> {
+    const mainDocPath = 'appData/main';
     
     // 1. CLOUD MODE (FIREBASE)
     try {
+      // Check if we have valid-looking config first
+      const config = await import('../firebase-applet-config.json');
+      if (!config.projectId || config.projectId.includes('remixed-project-id')) {
+        throw new Error('Firebase not provisioned');
+      }
+
       const docRef = doc(db, 'appData', 'main');
       const docSnap = await getDoc(docRef);
 
@@ -50,7 +58,15 @@ export const storageService = {
          console.warn("No data in Firebase yet, will try to fall back to local");
       }
     } catch (e: any) {
-      console.error("Firebase Fetch Error, falling back to local:", e);
+      if (e.message?.includes('Firebase not provisioned')) {
+        // Silently fall back if we know it's just not set up yet
+      } else if (e.message?.includes('offline')) {
+        console.warn("Firebase is offline or configuration is invalid. Falling back to local storage.");
+      } else {
+        console.error("Firebase Fetch Error, falling back to local:", e);
+        // We don't throw handleFirestoreError here because we HAVE a local fallback.
+        // But for critical operations, we should use it.
+      }
     }
     
     // 2. LOCAL MODE (FALLBACK)
@@ -93,9 +109,16 @@ export const storageService = {
   },
 
   async _saveFullData(data: AppData): Promise<void> {
+    const mainDocPath = 'appData/main';
 
     // 1. CLOUD MODE (FIREBASE)
     try {
+        const config = await import('../firebase-applet-config.json');
+        if (!config.projectId || config.projectId.includes('remixed-project-id')) {
+          this._updateLocalCache(data);
+          return;
+        }
+
         const docRef = doc(db, 'appData', 'main');
         await setDoc(docRef, data);
         
@@ -103,11 +126,19 @@ export const storageService = {
         this._updateLocalCache(data);
         return; // End early if save succeeded
     } catch (e: any) {
-        console.error("Firebase Save Error, saving locally only:", e);
+        if (e.message?.includes('Firebase not provisioned')) {
+          this._updateLocalCache(data);
+        } else {
+          // If Firestore is provisioned but write fails (e.g. permissions), log details
+          console.error("Firebase Save Error, saving locally only:", e);
+          try {
+            handleFirestoreError(e, OperationType.WRITE, mainDocPath);
+          } catch (detailedError) {
+            // Re-throw or ignore if we want to continue with local fallback
+          }
+          this._updateLocalCache(data);
+        }
     }
-    
-    // 2. LOCAL MODE
-    this._updateLocalCache(data);
   },
 
   _updateLocalCache(data: AppData) {
@@ -120,6 +151,15 @@ export const storageService = {
   },
 
   // --- PUBLIC METHODS ---
+
+  async isCloudAvailable(): Promise<boolean> {
+    try {
+      const config = await import('../firebase-applet-config.json');
+      return !!(config.projectId && !config.projectId.includes('remixed-project-id'));
+    } catch {
+      return false;
+    }
+  },
 
   async getUsers(): Promise<User[]> {
     const data = await this._fetchFullData();

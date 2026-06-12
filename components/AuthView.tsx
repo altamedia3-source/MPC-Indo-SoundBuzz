@@ -28,10 +28,15 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLogin, onRegister, onOpenA
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const config = storageService.getCloudConfig();
-    if (config && config.enabled) {
-      setCloudStatus('CONNECTED');
-    }
+    const checkCloud = async () => {
+      const available = await storageService.isCloudAvailable();
+      if (available) {
+        setCloudStatus('CONNECTED');
+      } else {
+        setCloudStatus('DISCONNECTED');
+      }
+    };
+    checkCloud();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -83,7 +88,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLogin, onRegister, onOpenA
           StreamGuard
         </h1>
         <p className="text-purple-200 opacity-80 font-medium">
-          {isRegistering ? 'Create your Community Profile' : 'MPC Indie Trending'}
+          {isRegistering ? 'Create your Community Profile' : 'MPC Indo SoundBuzz'}
         </p>
         
         {/* Status Indicator Only - No Click/Edit */}
