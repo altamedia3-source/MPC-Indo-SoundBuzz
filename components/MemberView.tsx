@@ -416,6 +416,23 @@ export const MemberView: React.FC<MemberViewProps> = ({ weeklySchedule, currentU
     return dates;
   };
 
+  const getCurrentWeekDays = () => {
+    const today = new Date();
+    const currentDay = today.getDay();
+    const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay;
+    
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + mondayOffset);
+    
+    const weekDays = [];
+    for (let i = 0; i < 5; i++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        weekDays.push(d);
+    }
+    return weekDays;
+  };
+
   return (
     <div className="w-full max-w-md mx-auto p-4 flex flex-col items-center">
       
@@ -452,6 +469,37 @@ export const MemberView: React.FC<MemberViewProps> = ({ weeklySchedule, currentU
               <Settings size={16} />
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Weekly History */}
+      <div className="w-full mb-6 glass p-4 rounded-2xl border border-white/10">
+        <h3 className="text-white font-bold mb-3 text-sm flex items-center justify-between">
+          <span>Riwayat Absensi Mingguan</span>
+          <span className="text-xs text-gray-400 font-normal">Sen - Jum</span>
+        </h3>
+        <div className="flex justify-between items-center gap-2">
+          {getCurrentWeekDays().map((date, index) => {
+            const dateStr = date.toLocaleDateString();
+            const checkedIn = currentUser.checkInHistory?.includes(dateStr) || currentUser.patchedDates?.includes(dateStr);
+            const isToday = date.toDateString() === new Date().toDateString();
+            const daysIndo = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum'];
+            const dayName = daysIndo[index];
+            return (
+              <div key={index} className="flex flex-col items-center gap-1">
+                <span className={`text-[10px] font-bold ${isToday ? 'text-neon-green' : 'text-gray-400'}`}>
+                  {dayName}
+                </span>
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all ${
+                  checkedIn 
+                    ? 'bg-green-900/30 border-green-500 text-green-400' 
+                    : (isToday ? 'bg-white/5 border-neon-purple/50 text-white' : 'bg-black/30 border-white/10 text-gray-600')
+                }`}>
+                  {checkedIn ? <CheckCircle2 size={18} /> : <span className="text-xs">{date.getDate()}</span>}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
